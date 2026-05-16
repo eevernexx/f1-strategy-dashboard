@@ -1,0 +1,41 @@
+# Virtual environment (HARUS di-exclude — gede & platform-specific)
+venv/
+env/
+.venv/
+ENV/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.pytest_cache/
+
+# FastF1 cache (1.3GB — terlalu besar untuk git, biarkan Streamlit Cloud fetch ulang)
+data/cache/
+*.ff1pkl
+
+# IDE & editor
+.vscode/
+.idea/
+.claude/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Streamlit secrets (kalau pakai)
+.streamlit/secrets.toml
+
+# OS
+desktop.ini
+
+# Notes lokal
+bsk ngerjain ini.md
+
+# Environment vars
+.env
+.env.local

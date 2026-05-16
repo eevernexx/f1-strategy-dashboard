@@ -1,0 +1,17 @@
+[theme]
+base = "dark"
+primaryColor = "#E8002D"
+backgroundColor = "#080808"
+secondaryBackgroundColor = "#111111"
+textColor = "#FFFFFF"
+font = "sans serif"
+
+[server]
+# Streamlit Cloud meng-override port lewat ENV — biarkan default
+headless = true
+runOnSave = false
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
