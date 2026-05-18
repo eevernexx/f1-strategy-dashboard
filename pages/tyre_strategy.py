@@ -9,6 +9,11 @@ Features:
 - Stint pace evolution (#6)
 - Undercut/Overcut detector (#8)
 - Help tooltips (#19)
+- ML Pit Optimizer (#12-#15):
+  - Tyre degradation model (XGBoost regression)
+  - Optimal pit window predictor
+  - What-if simulator
+  - SHAP / feature importance
 """
 
 import pandas as pd
@@ -25,6 +30,18 @@ from src.viz.strategy_charts import (
     build_pit_timeline,
     build_tyre_degradation_scatter,
     build_stint_pace_evolution,
+)
+from src.viz.ml_charts import (
+    build_predicted_vs_actual,
+    build_pit_window_chart,
+    build_feature_importance,
+)
+from src.ml.tyre_model import (
+    prepare_training_data,
+    train_pit_model,
+    optimize_pit_window,
+    compute_feature_importance,
+    COMPOUND_LEVELS,
 )
 from src.utils.config import (
     COMPOUND_COLORS,
@@ -478,5 +495,221 @@ def render():
                     pit_effect_f[display_cols],
                     use_container_width=True, hide_index=True,
                 )
+
+    st.divider()
+
+    # ───────────────────────────────────────────────────────────────────────
+    # ML SECTION — Tyre degradation model + Pit optimizer (#12-#15)
+    # ───────────────────────────────────────────────────────────────────────
+    st.subheader(
+        "ML Pit Stop Optimizer",
+        help=(
+            "Trained XGBoost regressor pada lap data session ini untuk predict "
+            "lap time sebagai fungsi (TyreLife, Compound, FuelLoad, "
+            "TrackTemp, AirTemp, Stint). Lalu pakai model untuk cari "
+            "pit lap optimal yang minimize total remaining race time. "
+            "Slider what-if biar bisa explore alternative strategy."
+        ),
+    )
+
+    # Get weather data (untuk fitur TrackTemp, AirTemp)
+    try:
+        weather_data = session.weather_data
+    except Exception:
+        weather_data = None
+
+    try:
+        total_laps_val = int(session.laps["LapNumber"].max())
+    except Exception:
+        total_laps_val = None
+
+    if len(clean_laps) < 20:
+        st.info(
+            "Not enough clean laps (need ≥ 20) untuk train ML model. "
+            "Coba session race full-length."
+        )
+        return
+
+    # Prepare training data
+    with st.spinner("Preparing training data..."):
+        X, y, feature_cols = prepare_training_data(
+            clean_laps, weather_data, total_laps_val
+        )
+
+    if X is None or y is None or len(X) < 20:
+        st.warning("Insufficient feature data for ML training.")
+        return
+
+    # Train model (cached per session_id via st.cache_resource)
+    @st.cache_resource(ttl=3600, show_spinner=False)
+    def _train_cached(session_id_key: str, _X, _y):
+        return train_pit_model(_X, _y)
+
+    with st.spinner(f"Training XGBoost model on {len(X)} laps..."):
+        result = _train_cached(session_id, X, y)
+
+    if result is None:
+        st.error(
+            "ML training failed — XGBoost/sklearn might not be installed, "
+            "atau training data corrupted."
+        )
+        return
+
+    model, metrics = result
+
+    # Training metrics
+    mcol1, mcol2, mcol3 = st.columns(3)
+    with mcol1:
+        st.metric("R² (test)", f"{metrics['r2_test']:.3f}",
+                  delta=f"R² train: {metrics['r2_train']:.3f}", delta_color="off")
+    with mcol2:
+        st.metric("MAE (test)", f"{metrics['mae_test']:.3f}s")
+    with mcol3:
+        st.metric("Training rows", f"{metrics['n_train']} / {metrics['n_test']} test")
+
+    # Predicted vs actual
+    fig_pa = build_predicted_vs_actual(
+        metrics["y_test"], metrics["y_pred"], r2=metrics["r2_test"]
+    )
+    if fig_pa is not None:
+        st.plotly_chart(fig_pa, use_container_width=True,
+                        config={"displayModeBar": False})
+
+    st.divider()
+
+    # ── Pit window optimizer (#13) ────────────────────────────────────────
+    st.subheader(
+        "Optimal Pit Window Predictor",
+        help=(
+            "Set current state di kanan → app simulate semua kandidat pit lap "
+            "dari current+1 sampai akhir race, predict total remaining time "
+            "untuk masing-masing, pilih yang minimum. Garis dotted = baseline "
+            "kalau tidak pit sama sekali."
+        ),
+    )
+
+    pcol1, pcol2 = st.columns([1, 2])
+    with pcol1:
+        st.markdown("**Current state**")
+
+        # Default values dari data
+        default_lap = max(1, total_laps_val // 3) if total_laps_val else 10
+        sim_current_lap = st.number_input(
+            "Current lap",
+            min_value=1, max_value=(total_laps_val or 100) - 1,
+            value=default_lap,
+            step=1, key="sim_lap",
+        )
+        sim_tyre_age = st.number_input(
+            "Current tyre age (laps)",
+            min_value=0, max_value=60, value=15, step=1, key="sim_age",
+        )
+        sim_current_compound = st.selectbox(
+            "Current compound",
+            options=COMPOUND_LEVELS,
+            index=1,  # Medium default
+            key="sim_curr_comp",
+        )
+        sim_fresh_compound = st.selectbox(
+            "Fresh compound (after pit)",
+            options=COMPOUND_LEVELS,
+            index=2,  # Hard default
+            key="sim_fresh_comp",
+        )
+        sim_pit_loss = st.slider(
+            "Pit stop loss (sec)",
+            min_value=15.0, max_value=35.0, value=22.0, step=0.5,
+            key="sim_pit_loss",
+            help="Total waktu hilang di pit lane (drive in + stop + drive out)."
+        )
+
+    with pcol2:
+        # Compute track/air temp from data
+        track_temp_val = 30.0
+        air_temp_val = 25.0
+        if weather_data is not None and len(weather_data) > 0:
+            try:
+                if "TrackTemp" in weather_data.columns:
+                    track_temp_val = float(weather_data["TrackTemp"].mean())
+                if "AirTemp" in weather_data.columns:
+                    air_temp_val = float(weather_data["AirTemp"].mean())
+            except Exception:
+                pass
+
+        opt_result = optimize_pit_window(
+            model=model,
+            current_lap=int(sim_current_lap),
+            current_tyre_life=int(sim_tyre_age),
+            current_compound=sim_current_compound,
+            current_stint=1,
+            fresh_compound=sim_fresh_compound,
+            total_laps=total_laps_val or 50,
+            track_temp=track_temp_val,
+            air_temp=air_temp_val,
+            pit_loss_seconds=float(sim_pit_loss),
+        )
+
+        if opt_result is None:
+            st.warning("Could not compute pit optimization (check inputs).")
+        else:
+            # Summary metrics
+            ocol1, ocol2 = st.columns(2)
+            with ocol1:
+                st.metric(
+                    "Optimal pit lap",
+                    f"Lap {opt_result['optimal_pit_lap']}",
+                )
+            with ocol2:
+                saving = opt_result["saving"]
+                if saving > 0:
+                    delta_str = f"Saves {saving:.1f}s vs no-pit"
+                    delta_color = "normal"
+                else:
+                    delta_str = f"No-pit is {-saving:.1f}s faster"
+                    delta_color = "inverse"
+                st.metric(
+                    "Best total time",
+                    f"{opt_result['best_total']:.1f}s",
+                    delta=delta_str,
+                    delta_color=delta_color,
+                )
+
+            # Pit window chart
+            fig_pw = build_pit_window_chart(
+                opt_result["candidates"],
+                opt_result["optimal_pit_lap"],
+                opt_result["baseline_no_pit"],
+            )
+            if fig_pw is not None:
+                st.plotly_chart(fig_pw, use_container_width=True,
+                                config={"displayModeBar": False})
+
+    st.divider()
+
+    # ── Feature importance / SHAP (#15) ───────────────────────────────────
+    st.subheader(
+        "Feature importance",
+        help=(
+            "Apa yang paling memengaruhi prediksi lap time? Mean absolute "
+            "impact per feature. Pakai SHAP kalau library tersedia (lebih "
+            "robust), fallback ke XGBoost built-in feature importance (gain)."
+        ),
+    )
+
+    importance_df = compute_feature_importance(model, X, feature_cols)
+    if len(importance_df) > 0:
+        fig_imp = build_feature_importance(importance_df)
+        if fig_imp is not None:
+            st.plotly_chart(fig_imp, use_container_width=True,
+                            config={"displayModeBar": False})
+
+        # Show method used
+        method = importance_df["Method"].iloc[0] if "Method" in importance_df.columns else "?"
+        st.caption(
+            f"Computed via **{method}**. "
+            f"{'SHAP = Shapley value, robust untuk tree models.' if method == 'SHAP' else 'Fallback: XGBoost split gain. Install shap untuk SHAP-based importance.'}"
+        )
+    else:
+        st.info("Feature importance unavailable.")
 
     st.divider()
