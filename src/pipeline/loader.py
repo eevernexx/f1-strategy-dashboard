@@ -52,17 +52,19 @@ _IS_CLOUD = (
 )
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+# CRITICAL: gunakan cache_resource (BUKAN cache_data) untuk FastF1 Session.
+# cache_data pickles return value → FastF1 Session object kehilangan state
+# "data loaded" setelah unpickle → DataNotLoadedError saat akses .laps/.telemetry.
+# cache_resource menyimpan object as-is di memory (no pickling) → state preserved.
+@st.cache_resource(ttl=3600, show_spinner=False)
 def load_session(year: int, gp: str, session_type: str) -> fastf1.core.Session | None:
     """
     Load a FastF1 session. Returns None on failure (never raises).
-    Cached for 1 hour — fast enough for a dashboard.
+    Cached as RESOURCE (not data) — preserves loaded state across cache hits.
 
     Loading strategy:
     - Local: load semua (laps + telemetry + weather + messages)
-    - Cloud: load lebih konservatif untuk hindari timeout / memory issue.
-      Laps WAJIB sukses; telemetry/weather/messages best-effort (caller pages
-      sudah handle kalau missing).
+    - Cloud: laps WAJIB sukses; telemetry/weather/messages best-effort.
     """
     try:
         session = fastf1.get_session(year, gp, session_type)
@@ -70,31 +72,29 @@ def load_session(year: int, gp: str, session_type: str) -> fastf1.core.Session |
         st.error(f"Failed to get session: {e}")
         return None
 
-    # Phase 1: WAJIB — laps + messages (untuk race events parsing)
+    # Phase 1: WAJIB — laps + messages (race events parsing)
     try:
         session.load(laps=True, telemetry=False, weather=False, messages=True)
     except Exception as e:
         st.error(
             f"Failed to load lap data: {e}\n\n"
-            "FastF1 might be rate-limited or the F1 API is unreachable. "
-            "Try again in a few minutes."
+            "FastF1 might be rate-limited atau F1 API unreachable. "
+            "Coba session lain atau tunggu beberapa menit."
         )
         return None
 
-    # Phase 2: OPSIONAL — telemetry (gede & paling sering fail di cloud)
+    # Phase 2: OPSIONAL — telemetry (heaviest, paling sering fail di cloud)
     try:
         session.load(laps=False, telemetry=True, weather=False, messages=False)
     except Exception:
-        # Telemetry gagal → telemetry page bakal kasih warning per-driver,
-        # tapi race overview & tyre strategy masih jalan
         if not _IS_CLOUD:
-            st.warning("Telemetry data unavailable — some Telemetry Analyzer features limited.")
+            st.warning("Telemetry data unavailable — some features may be limited.")
 
     # Phase 3: OPSIONAL — weather
     try:
         session.load(laps=False, telemetry=False, weather=True, messages=False)
     except Exception:
-        pass  # Weather missing = OK, fallback graceful
+        pass
 
     return session
 
