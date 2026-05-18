@@ -15,9 +15,30 @@ import streamlit as st
 from src.utils.config import CACHE_DIR, F1_ROUNDS, YEAR
 
 
+def _resolve_cache_dir() -> str:
+    """
+    Pick writable cache dir:
+    - Streamlit Cloud / cloud env → /tmp/fastf1_cache (always writable, ephemeral)
+    - Local dev → data/cache (relative to project, persistent)
+
+    Detection: kalau HOME=/home/adminuser (Streamlit Cloud convention) atau
+    /mount/src ada (mount path Streamlit Cloud).
+    """
+    is_cloud = (
+        os.environ.get("HOME") == "/home/adminuser"
+        or os.path.exists("/mount/src")
+    )
+    return "/tmp/fastf1_cache" if is_cloud else CACHE_DIR
+
+
 def _setup_cache():
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    fastf1.Cache.enable_cache(CACHE_DIR)
+    cache_dir = _resolve_cache_dir()
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        fastf1.Cache.enable_cache(cache_dir)
+    except Exception:
+        # Worst case: FastF1 jalan tanpa disk cache (slower tapi tetap work)
+        pass
 
 
 _setup_cache()
@@ -130,11 +151,32 @@ def get_pos_data_for_lap(_lap, lap_id: str) -> pd.DataFrame | None:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_session_drivers(_session: fastf1.core.Session, session_id: str) -> list[str]:
-    """Return sorted list of driver abbreviations present in the session."""
+    """
+    Return sorted list of driver abbreviations present in the session.
+    Coba dari laps dulu, fallback ke results (untuk kasus laps fail load
+    di cloud environment).
+    """
+    # 1. Try session.laps["Driver"]
     try:
-        return sorted(_session.laps["Driver"].unique().tolist())
+        if _session.laps is not None and len(_session.laps) > 0:
+            if "Driver" in _session.laps.columns:
+                drivers = _session.laps["Driver"].dropna().unique().tolist()
+                if drivers:
+                    return sorted([str(d) for d in drivers])
     except Exception:
-        return []
+        pass
+
+    # 2. Fallback: session.results["Abbreviation"]
+    try:
+        if hasattr(_session, "results") and _session.results is not None:
+            if len(_session.results) > 0 and "Abbreviation" in _session.results.columns:
+                drivers = _session.results["Abbreviation"].dropna().unique().tolist()
+                if drivers:
+                    return sorted([str(d) for d in drivers])
+    except Exception:
+        pass
+
+    return []
 
 
 # ── Race-level helpers ────────────────────────────────────────────────────────
