@@ -10,7 +10,8 @@ font = "sans serif"
 # Streamlit Cloud meng-override port lewat ENV — biarkan default
 headless = true
 runOnSave = false
-enableCORS = false
+# enableCORS dibiarkan default (true) supaya kompatibel dengan
+# enableXsrfProtection=true. Streamlit warn kalau dua-duanya di-set inkonsisten.
 enableXsrfProtection = true
 
 [browser]
