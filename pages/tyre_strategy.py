@@ -51,6 +51,15 @@ from src.utils.config import (
 )
 
 
+# ── ML training cache (module-level) ──────────────────────────────────────
+# Defined di module level (bukan di dalam render) supaya Streamlit cache_resource
+# stable identity → cache hit konsisten antar rerun.
+@st.cache_resource(ttl=3600, show_spinner=False)
+def _train_cached_model(session_id_key: str, _X, _y):
+    """Trained model cached per session. _X/_y excluded from hash via _-prefix."""
+    return train_pit_model(_X, _y)
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def _stints_df(session) -> pd.DataFrame:
@@ -540,13 +549,9 @@ def render():
         st.warning("Insufficient feature data for ML training.")
         return
 
-    # Train model (cached per session_id via st.cache_resource)
-    @st.cache_resource(ttl=3600, show_spinner=False)
-    def _train_cached(session_id_key: str, _X, _y):
-        return train_pit_model(_X, _y)
-
+    # Train model — pakai module-level cache untuk stable identity
     with st.spinner(f"Training XGBoost model on {len(X)} laps..."):
-        result = _train_cached(session_id, X, y)
+        result = _train_cached_model(session_id, X, y)
 
     if result is None:
         st.error(
@@ -588,21 +593,53 @@ def render():
         ),
     )
 
+    # Pre-compute track/air temp dari weather (untuk display + prediction)
+    track_temp_val = 30.0
+    air_temp_val = 25.0
+    if weather_data is not None and len(weather_data) > 0:
+        try:
+            if "TrackTemp" in weather_data.columns and weather_data["TrackTemp"].notna().any():
+                track_temp_val = float(weather_data["TrackTemp"].mean())
+            if "AirTemp" in weather_data.columns and weather_data["AirTemp"].notna().any():
+                air_temp_val = float(weather_data["AirTemp"].mean())
+        except Exception:
+            pass
+
+    # Display weather context yang dipakai model
+    st.caption(
+        f"Model menggunakan rata-rata cuaca session ini: "
+        f"<b style='color:#FF6B35'>Track {track_temp_val:.0f}°C</b> · "
+        f"<b style='color:#3DA9FF'>Air {air_temp_val:.0f}°C</b>",
+        unsafe_allow_html=True,
+    )
+
+    # Safe max_value: leave at least 3 laps remaining (1 pit candidate + 2 fresh laps)
+    sim_max_lap = max(2, (total_laps_val or 100) - 3)
+
     pcol1, pcol2 = st.columns([1, 2])
     with pcol1:
         st.markdown("**Current state**")
 
         # Default values dari data
-        default_lap = max(1, total_laps_val // 3) if total_laps_val else 10
+        default_lap = max(1, (total_laps_val or 30) // 3)
+        default_lap = min(default_lap, sim_max_lap)
+
         sim_current_lap = st.number_input(
             "Current lap",
-            min_value=1, max_value=(total_laps_val or 100) - 1,
+            min_value=1, max_value=sim_max_lap,
             value=default_lap,
             step=1, key="sim_lap",
+            help=f"Saat ini balapan di lap berapa? Max {sim_max_lap} (sisa ≥3 lap untuk pit calculation).",
         )
         sim_tyre_age = st.number_input(
             "Current tyre age (laps)",
             min_value=0, max_value=60, value=15, step=1, key="sim_age",
+            help="Sudah berapa lap pakai ban ini? Reset ke 0 berarti baru ganti.",
+        )
+        sim_stint = st.number_input(
+            "Current stint #",
+            min_value=1, max_value=5, value=1, step=1, key="sim_stint",
+            help="Sudah berapa kali ganti ban + 1. Stint 1 = belum pernah pit, Stint 2 = sudah 1× pit, dst.",
         )
         sim_current_compound = st.selectbox(
             "Current compound",
@@ -620,28 +657,19 @@ def render():
             "Pit stop loss (sec)",
             min_value=15.0, max_value=35.0, value=22.0, step=0.5,
             key="sim_pit_loss",
-            help="Total waktu hilang di pit lane (drive in + stop + drive out)."
+            help=(
+                "Total waktu hilang di pit lane (drive in + stop + drive out). "
+                "Modern F1: 20-25s typical (fastest ~18s, slow ~30s)."
+            ),
         )
 
     with pcol2:
-        # Compute track/air temp from data
-        track_temp_val = 30.0
-        air_temp_val = 25.0
-        if weather_data is not None and len(weather_data) > 0:
-            try:
-                if "TrackTemp" in weather_data.columns:
-                    track_temp_val = float(weather_data["TrackTemp"].mean())
-                if "AirTemp" in weather_data.columns:
-                    air_temp_val = float(weather_data["AirTemp"].mean())
-            except Exception:
-                pass
-
         opt_result = optimize_pit_window(
             model=model,
             current_lap=int(sim_current_lap),
             current_tyre_life=int(sim_tyre_age),
             current_compound=sim_current_compound,
-            current_stint=1,
+            current_stint=int(sim_stint),
             fresh_compound=sim_fresh_compound,
             total_laps=total_laps_val or 50,
             track_temp=track_temp_val,
