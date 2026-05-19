@@ -217,6 +217,298 @@ def _pit_effect_table(session) -> pd.DataFrame:
     return df
 
 
+# ── Nice-to-have analytics ────────────────────────────────────────────────
+
+def _strategy_comparison(stints_df: pd.DataFrame, driver_order: list[str]) -> pd.DataFrame:
+    """
+    Untuk tiap driver: compound sequence (e.g., "M-H-H") + jumlah stop + detail stints.
+    Driver_order untuk preserve finishing position order.
+    """
+    if stints_df is None or len(stints_df) == 0:
+        return pd.DataFrame()
+
+    rows = []
+    drivers = [d for d in driver_order if d in stints_df["Driver"].unique()] \
+              if driver_order else sorted(stints_df["Driver"].unique())
+
+    for driver in drivers:
+        drv = stints_df[stints_df["Driver"] == driver].sort_values("Stint")
+        if len(drv) == 0:
+            continue
+        compounds = [
+            (c[0].upper() if isinstance(c, str) and len(c) > 0 else "?")
+            for c in drv["Compound"]
+        ]
+        sequence = "–".join(compounds)
+        detail = " · ".join(
+            f"{(c[0].upper() if isinstance(c, str) and len(c) > 0 else '?')}({int(l)})"
+            for c, l in zip(drv["Compound"], drv["Laps"])
+        )
+        rows.append({
+            "Driver":   driver,
+            "Stops":    len(drv) - 1,
+            "Strategy": sequence,
+            "Stints":   detail,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _driver_tyre_mgmt(clean_laps: pd.DataFrame) -> pd.DataFrame:
+    """
+    Degradation rate (s/lap) per (Driver, Compound) via linear regression
+    pada TyreLife vs LapTimeSeconds. Lower = better tyre management.
+    """
+    needed = ("Driver", "Compound", "TyreLife", "LapTimeSeconds")
+    if any(c not in clean_laps.columns for c in needed):
+        return pd.DataFrame()
+
+    df = clean_laps.dropna(subset=list(needed)).copy()
+    if len(df) == 0:
+        return pd.DataFrame()
+
+    import numpy as np
+    rows = []
+    for (driver, compound), grp in df.groupby(["Driver", "Compound"]):
+        if not isinstance(compound, str) or len(grp) < 5:
+            continue
+        # Filter outliers per group (>2σ above median)
+        median = grp["LapTimeSeconds"].median()
+        std = grp["LapTimeSeconds"].std()
+        if pd.notna(std):
+            grp = grp[grp["LapTimeSeconds"] <= median + 2 * std]
+        if len(grp) < 5:
+            continue
+        x = grp["TyreLife"].astype(float).values
+        y = grp["LapTimeSeconds"].astype(float).values
+        try:
+            slope, intercept = np.polyfit(x, y, deg=1)
+        except Exception:
+            continue
+        rows.append({
+            "Driver":              driver,
+            "Compound":            compound.title(),
+            "Degradation (s/lap)": float(round(slope, 4)),
+            "Avg pace (s)":        float(round(y.mean(), 3)),
+            "Samples":             len(grp),
+        })
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("Degradation (s/lap)").reset_index(drop=True)
+
+
+def _tyre_warmup(clean_laps: pd.DataFrame) -> pd.DataFrame:
+    """
+    Per compound, rata-rata tyre age (laps) saat peak pace (fastest lap di stint
+    itu). Mengindikasikan berapa lap warm-up tipikal sebelum compound capai
+    optimal pace.
+    """
+    needed = ("Driver", "Stint", "Compound", "TyreLife", "LapTimeSeconds")
+    if any(c not in clean_laps.columns for c in needed):
+        return pd.DataFrame()
+
+    df = clean_laps.dropna(subset=list(needed)).copy()
+    if len(df) == 0:
+        return pd.DataFrame()
+
+    rows = []
+    for compound, grp_c in df.groupby("Compound"):
+        if not isinstance(compound, str):
+            continue
+        ages_at_best = []
+        for (driver, stint), grp in grp_c.groupby(["Driver", "Stint"]):
+            if len(grp) < 3:
+                continue
+            best_idx = grp["LapTimeSeconds"].idxmin()
+            try:
+                ages_at_best.append(int(grp.loc[best_idx, "TyreLife"]))
+            except Exception:
+                continue
+        if not ages_at_best:
+            continue
+        rows.append({
+            "Compound":             compound.title(),
+            "Avg laps to peak":     float(round(sum(ages_at_best) / len(ages_at_best), 1)),
+            "Min":                  int(min(ages_at_best)),
+            "Max":                  int(max(ages_at_best)),
+            "Stints analyzed":      len(ages_at_best),
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("Avg laps to peak").reset_index(drop=True)
+
+
+def _pit_window_stats(stints_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Per compound: min/median/max stint length — defines typical "pit window".
+    """
+    if stints_df is None or len(stints_df) == 0:
+        return pd.DataFrame()
+    if "Compound" not in stints_df.columns or "Laps" not in stints_df.columns:
+        return pd.DataFrame()
+
+    import numpy as np
+    rows = []
+    for compound, grp in stints_df.groupby("Compound"):
+        if not isinstance(compound, str):
+            continue
+        lengths = grp["Laps"].dropna().astype(int).values
+        if len(lengths) == 0:
+            continue
+        rows.append({
+            "Compound":     compound.title(),
+            "Min stint":    int(lengths.min()),
+            "Median stint": int(round(np.median(lengths))),
+            "Max stint":    int(lengths.max()),
+            "Avg":          float(round(lengths.mean(), 1)),
+            "Stints":       len(lengths),
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("Median stint", ascending=False).reset_index(drop=True)
+
+
+def _strategy_auto_summary(
+    stints_df: pd.DataFrame,
+    session,
+) -> str | None:
+    """
+    Auto-generate 2-4 sentence narrative tentang strategy race ini.
+    """
+    if stints_df is None or len(stints_df) == 0:
+        return None
+
+    # Stops per driver
+    stops_per_driver = (
+        stints_df.groupby("Driver")["Stint"].max() - 1
+    ).astype(int)
+    if len(stops_per_driver) == 0:
+        return None
+
+    n_drivers = len(stops_per_driver)
+    sentences: list[str] = []
+
+    # 1. Most common stop strategy
+    mode_stops = stops_per_driver.mode()
+    if not mode_stops.empty:
+        most_common = int(mode_stops.iloc[0])
+        count_majority = int((stops_per_driver == most_common).sum())
+        sentences.append(
+            f"<b>{count_majority}/{n_drivers}</b> drivers ran a "
+            f"<b>{most_common}-stop</b> strategy."
+        )
+
+    # 2. Compound sequences
+    sequences: dict[str, list[str]] = {}
+    for driver in stops_per_driver.index:
+        drv = stints_df[stints_df["Driver"] == driver].sort_values("Stint")
+        seq = "–".join(
+            c[0].upper() if isinstance(c, str) and len(c) > 0 else "?"
+            for c in drv["Compound"]
+        )
+        sequences.setdefault(seq, []).append(driver)
+
+    if sequences:
+        top_seq, top_drivers = max(sequences.items(), key=lambda kv: len(kv[1]))
+        if len(top_drivers) >= 2:
+            sentences.append(
+                f"Dominant compound sequence: <b style='color:#FFD700'>{top_seq}</b> "
+                f"({len(top_drivers)} drivers)."
+            )
+
+        # Outliers — unique strategies
+        outliers = {seq: drvs for seq, drvs in sequences.items() if len(drvs) == 1}
+        if outliers:
+            outlier_strs = [f"{drvs[0]} ({seq})" for seq, drvs in list(outliers.items())[:3]]
+            if outlier_strs:
+                sentences.append(
+                    f"Outlier strategies: {', '.join(outlier_strs)}."
+                )
+
+    if not sentences:
+        return None
+    return " ".join(sentences)
+
+
+def _strategy_backtest(
+    model,
+    stints_df: pd.DataFrame,
+    pit_laps_df: pd.DataFrame,
+    total_laps: int,
+    track_temp: float,
+    air_temp: float,
+    pit_loss: float = 22.0,
+) -> pd.DataFrame:
+    """
+    Untuk tiap driver yang pit tepat 1×, predict optimal pit lap dari model
+    (assume start state = lap 1, fresh tyres, starting compound). Compare ke
+    actual pit lap → delta verdict (early/late/optimal).
+    """
+    if model is None or stints_df is None or pit_laps_df is None:
+        return pd.DataFrame()
+    if len(pit_laps_df) == 0 or len(stints_df) == 0:
+        return pd.DataFrame()
+
+    rows = []
+    drivers = pit_laps_df["Driver"].unique()
+    for driver in drivers:
+        drv_pits = pit_laps_df[pit_laps_df["Driver"] == driver].sort_values("LapNumber")
+        if len(drv_pits) != 1:    # skip 0-stop & 2+ stop drivers
+            continue
+        try:
+            actual_pit_lap = int(drv_pits.iloc[0]["LapNumber"])
+        except Exception:
+            continue
+        compound_after = drv_pits.iloc[0].get("CompoundAfter")
+
+        drv_stints = stints_df[stints_df["Driver"] == driver].sort_values("Stint")
+        if len(drv_stints) < 2:
+            continue
+        start_compound = drv_stints.iloc[0]["Compound"]
+        if not isinstance(start_compound, str):
+            continue
+        fresh_compound = compound_after if isinstance(compound_after, str) else "HARD"
+
+        opt = optimize_pit_window(
+            model=model,
+            current_lap=1, current_tyre_life=0,
+            current_compound=start_compound, current_stint=1,
+            fresh_compound=fresh_compound,
+            total_laps=total_laps,
+            track_temp=track_temp, air_temp=air_temp,
+            pit_loss_seconds=pit_loss,
+        )
+        if opt is None:
+            continue
+
+        optimal_lap = int(opt["optimal_pit_lap"])
+        delta = actual_pit_lap - optimal_lap
+        if delta > 1:
+            verdict = f"⟶ {delta} laps LATE"
+        elif delta < -1:
+            verdict = f"⟶ {-delta} laps EARLY"
+        else:
+            verdict = "≈ OPTIMAL"
+
+        rows.append({
+            "Driver":         driver,
+            "Actual":         actual_pit_lap,
+            "Predicted opt.": optimal_lap,
+            "Δ (laps)":       delta,
+            "Verdict":        verdict,
+            "Saving":         f"{opt['saving']:.1f}s",
+        })
+
+    if not rows:
+        return pd.DataFrame()
+    return (
+        pd.DataFrame(rows)
+        .sort_values("Δ (laps)", key=abs)
+        .reset_index(drop=True)
+    )
+
+
 # ── Render ─────────────────────────────────────────────────────────────────
 
 def render():
@@ -405,6 +697,40 @@ def render():
             st.plotly_chart(fig_pits, use_container_width=True,
                             config={"displayModeBar": False})
 
+    # ── #18 Auto strategy summary ────────────────────────────────────────────
+    narrative = _strategy_auto_summary(stints, session)
+    if narrative:
+        st.markdown(
+            f"""
+            <div style='padding:12px 16px;margin:12px 0 8px;
+                       background:linear-gradient(90deg, rgba(232,0,45,0.05) 0%, rgba(255,255,255,0.01) 100%);
+                       border-left:3px solid #E8002D;border-radius:0 4px 4px 0;
+                       font-family:Barlow,sans-serif;font-size:13.5px;
+                       line-height:1.5;color:#DDD'>
+                <div style='color:#888;font-size:10px;font-weight:700;
+                           letter-spacing:0.15em;text-transform:uppercase;
+                           font-family:Barlow Condensed,sans-serif;margin-bottom:6px'>
+                    Strategy Summary
+                </div>
+                {narrative}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ── #10 Strategy comparison ──────────────────────────────────────────────
+    strat_df = _strategy_comparison(stints, finish_order or all_drivers)
+    if len(strat_df) > 0:
+        st.subheader(
+            "Strategy comparison",
+            help=(
+                "Per driver: compound sequence (S=Soft, M=Medium, H=Hard, "
+                "I=Inter, W=Wet) + jumlah pit stops. Detail kolom 'Stints' "
+                "format C(N) = compound dengan N laps. Disort by finish position."
+            ),
+        )
+        st.dataframe(strat_df, use_container_width=True, hide_index=True)
+
     st.divider()
 
     # ── Get clean laps untuk degradation analysis ────────────────────────────
@@ -449,6 +775,62 @@ def render():
                             config={"displayModeBar": False})
         else:
             st.info("Not enough stint data for pace evolution.")
+
+    # ── #5 Driver tyre management ranking ────────────────────────────────────
+    if len(clean_laps) > 0:
+        mgmt_df = _driver_tyre_mgmt(clean_laps)
+        if selected_drivers:
+            mgmt_df = mgmt_df[mgmt_df["Driver"].isin(selected_drivers)]
+        if len(mgmt_df) > 0:
+            st.subheader(
+                "Driver tyre management ranking",
+                help=(
+                    "Degradation rate (detik/lap) per driver per compound, "
+                    "computed via linear regression TyreLife vs LapTimeSeconds. "
+                    "Lower = better tyre management. Filter outliers >2σ per group."
+                ),
+            )
+            # Highlight smallest degradation per compound (best manager)
+            def _highlight_best_mgmt(col):
+                if col.name == "Degradation (s/lap)":
+                    return [
+                        "background-color: rgba(57,181,74,0.18); color: #39B54A; font-weight: 700"
+                        if v == col.min() else ""
+                        for v in col
+                    ]
+                return [""] * len(col)
+            try:
+                styled = mgmt_df.style.apply(_highlight_best_mgmt, axis=0)
+                st.dataframe(styled, use_container_width=True, hide_index=True)
+            except Exception:
+                st.dataframe(mgmt_df, use_container_width=True, hide_index=True)
+
+    # ── #7 Tyre warm-up analysis ─────────────────────────────────────────────
+    if len(clean_laps) > 0:
+        warmup_df = _tyre_warmup(clean_laps)
+        if len(warmup_df) > 0:
+            st.subheader(
+                "Tyre warm-up analysis",
+                help=(
+                    "Berapa lap rata-rata tyre butuh untuk capai peak pace (lap "
+                    "tercepat di stint). Lower = warm-up cepat (e.g., Soft biasa "
+                    "warm-up 1-3 lap). Bisa beda per circuit & weather."
+                ),
+            )
+            st.dataframe(warmup_df, use_container_width=True, hide_index=True)
+
+    # ── #9 Pit window analysis (stint length stats per compound) ─────────────
+    pw_df = _pit_window_stats(stints)
+    if len(pw_df) > 0:
+        st.subheader(
+            "Pit window — stint length per compound",
+            help=(
+                "Statistik panjang stint per compound dari data session ini. "
+                "Median = typical stint length. Min/Max = range strategy. "
+                "Berguna untuk reference 'kapan biasanya pit out of this compound'."
+            ),
+        )
+        st.dataframe(pw_df, use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -739,5 +1121,76 @@ def render():
         )
     else:
         st.info("Feature importance unavailable.")
+
+    st.divider()
+
+    # ── #16 Strategy backtest ────────────────────────────────────────────────
+    st.subheader(
+        "Strategy backtest",
+        help=(
+            "Untuk tiap driver yang pit 1× di race ini, predict optimal pit lap "
+            "menggunakan trained model (assume start state = lap 1, fresh tyres, "
+            "starting compound dari first stint). Compare ke actual pit lap. "
+            "Δ positif = pit terlalu telat, negatif = terlalu awal, ≈0 = optimal."
+        ),
+    )
+
+    backtest_df = _strategy_backtest(
+        model=model,
+        stints_df=stints,
+        pit_laps_df=pit_laps,
+        total_laps=total_laps_val or 50,
+        track_temp=track_temp_val,
+        air_temp=air_temp_val,
+        pit_loss=22.0,
+    )
+    if len(backtest_df) > 0:
+        # Filter ke selected drivers
+        if selected_drivers:
+            backtest_df = backtest_df[backtest_df["Driver"].isin(selected_drivers)]
+
+        if len(backtest_df) > 0:
+            def _highlight_verdict(row):
+                styles = [""] * len(row)
+                if "Δ (laps)" in row.index:
+                    delta_val = row["Δ (laps)"]
+                    idx_v = list(row.index).index("Verdict")
+                    if abs(delta_val) <= 1:
+                        styles[idx_v] = (
+                            "background-color: rgba(57,181,74,0.22); "
+                            "color: #39B54A; font-weight: 700"
+                        )
+                    elif abs(delta_val) <= 3:
+                        styles[idx_v] = (
+                            "background-color: rgba(255,200,0,0.18); "
+                            "color: #FFC800; font-weight: 700"
+                        )
+                    else:
+                        styles[idx_v] = (
+                            "background-color: rgba(220,50,50,0.18); "
+                            "color: #DC3545; font-weight: 700"
+                        )
+                return styles
+
+            try:
+                styled = backtest_df.style.apply(_highlight_verdict, axis=1)
+                st.dataframe(styled, use_container_width=True, hide_index=True)
+            except Exception:
+                st.dataframe(backtest_df, use_container_width=True, hide_index=True)
+
+            st.caption(
+                "Disclaimer: model trained pada data session ini sendiri "
+                "(in-sample), jadi backtest mengukur 'apakah pit timing match "
+                "dengan optimum dari distribution data, BUKAN out-of-sample "
+                "prediction'. Untuk realistic backtest, perlu train pada race "
+                "berbeda lalu test di race ini."
+            )
+        else:
+            st.info("No 1-stop drivers in selected filter for backtest.")
+    else:
+        st.info(
+            "Strategy backtest unavailable — perlu minimal beberapa driver "
+            "dengan 1-stop strategy + trained model."
+        )
 
     st.divider()
