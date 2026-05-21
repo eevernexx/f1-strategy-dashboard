@@ -14,6 +14,7 @@ try:
         build_training_dataset,
         train_race_model,
         predict_race_outcome,
+        build_prediction_features,
         compute_race_shap,
     )
 except ImportError:
@@ -129,6 +130,7 @@ def render():
 
     # ── Prediction ─────────────────────────────────────────────────────
     proba_df = None
+    pred_X = None
     if run or "rp_proba_df" in st.session_state:
         if run:
             try:
@@ -138,7 +140,12 @@ def render():
                 proba_df = predict_race_outcome(
                     model_bundle, sess, year, selected_round_num,
                 )
+                # Feature matrix race ini (index = driver_code) untuk SHAP per-driver
+                pred_X = build_prediction_features(
+                    model_bundle, sess, year, selected_round_num,
+                )
                 st.session_state["rp_proba_df"] = proba_df
+                st.session_state["rp_pred_X"] = pred_X
                 st.session_state["rp_last_round"] = (year, selected_round_num)
             except Exception as exc:
                 st.error(f"Could not load race session: {exc}")
@@ -147,6 +154,7 @@ def render():
             last = st.session_state.get("rp_last_round")
             if last == (year, selected_round_num):
                 proba_df = st.session_state.get("rp_proba_df")
+                pred_X = st.session_state.get("rp_pred_X")
 
     if proba_df is None or len(proba_df) == 0:
         st.info("Select a round and click **RUN PREDICTION** to see results.")
@@ -175,28 +183,43 @@ def render():
             st.warning("No data to display.")
 
     with tab_shap:
-        shap_result = compute_race_shap(model_bundle, model_bundle.get("X_train"))
+        # SHAP dihitung pada feature matrix RACE INI (bukan training data),
+        # sehingga importance & waterfall benar-benar menjelaskan prediksi
+        # driver di race yang dipilih. shap_vals row order = pred_X.index order.
+        shap_result = compute_race_shap(model_bundle, pred_X)
 
-        if shap_result is None:
+        if shap_result is None or pred_X is None:
             st.warning("SHAP analysis unavailable.")
         elif isinstance(shap_result[0], np.ndarray) and shap_result[0].ndim >= 2:
             shap_vals, expected_vals, feat_names = shap_result
+            shap_driver_order = list(pred_X.index)  # baris i ↔ driver ini
 
             st.subheader("Global Feature Importance")
+            st.caption(
+                f"Mean |SHAP| across {len(shap_driver_order)} drivers in "
+                f"{selected_circuit} {year} (Podium class)."
+            )
             fig_imp = build_shap_importance_bar(shap_vals, feat_names)
             if fig_imp:
                 st.plotly_chart(fig_imp, use_container_width=True, key="rp_chart_shap_global")
 
             st.subheader("Driver Deep Dive")
+            # Selectbox urut by podium prob (UX), lookup posisi di shap_vals via driver_code
             driver_list = proba_df["driver_code"].tolist()
             sel_driver = st.selectbox(
                 "Driver", driver_list, key="rp_shap_driver",
             )
-            driver_idx_in_pred = driver_list.index(sel_driver) if sel_driver in driver_list else 0
-            sample_size = shap_vals.shape[0]
-            safe_idx = min(driver_idx_in_pred, sample_size - 1)
+            if sel_driver in shap_driver_order:
+                safe_idx = shap_driver_order.index(sel_driver)
+            else:
+                safe_idx = 0
+            safe_idx = min(safe_idx, shap_vals.shape[0] - 1)
             ev = float(expected_vals[1]) if len(expected_vals) > 1 else float(expected_vals[0])
 
+            st.caption(
+                f"Why **{sel_driver}** is predicted toward the **Podium** class — "
+                "green pushes probability up, red pushes it down."
+            )
             fig_wf = build_shap_waterfall(
                 shap_vals, ev, feat_names,
                 driver_idx=safe_idx, class_idx=1,
@@ -206,6 +229,7 @@ def render():
         else:
             importances, _, feat_names = shap_result
             st.subheader("Feature Importance (XGBoost built-in)")
+            st.caption("SHAP unavailable — showing XGBoost split-gain importance.")
             fig_imp = build_shap_importance_bar(importances, feat_names)
             if fig_imp:
                 st.plotly_chart(fig_imp, use_container_width=True, key="rp_chart_imp_fallback")

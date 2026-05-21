@@ -340,6 +340,31 @@ def predict_race_outcome(
     return out.sort_values("prob_podium", ascending=False).reset_index(drop=True)
 
 
+def build_prediction_features(
+    model_bundle: dict,
+    session,
+    year: int,
+    round_num: int,
+) -> pd.DataFrame | None:
+    """
+    Aligned per-race feature matrix untuk SHAP, di-index by driver_code.
+
+    Ini feature matrix yang SAMA dengan yang dipakai predict_race_outcome,
+    sehingga SHAP yang dihitung di atasnya benar-benar menjelaskan prediksi
+    driver di race ini (bukan baris acak dari training data). Row order =
+    urutan session.results; index = driver_code untuk lookup per-driver.
+    """
+    if model_bundle is None:
+        return None
+    df = assemble_race_features(year, round_num, session)
+    if df is None or len(df) == 0:
+        return None
+    fcols = model_bundle["feature_cols"]
+    X = df.reindex(columns=fcols, fill_value=0).astype(float)
+    X.index = df["driver_code"].values
+    return X
+
+
 # ── SHAP ───────────────────────────────────────────────────────────────────
 
 def compute_race_shap(
@@ -363,10 +388,18 @@ def compute_race_shap(
         try:
             explainer = shap.TreeExplainer(model)
             sv = explainer.shap_values(sample)
+            # Normalisasi SELALU ke [n_samples, n_classes, n_features].
+            # Multi-class XGBoost punya 2 format tergantung versi SHAP:
+            #   SHAP < 0.40 : list of n_classes arrays, masing-masing [n, n_features]
+            #   SHAP >= 0.40: ndarray [n, n_features, n_classes]
             if isinstance(sv, list):
-                sv = np.stack(sv, axis=1)
-            elif sv.ndim == 2:
-                sv = sv[:, np.newaxis, :]
+                sv = np.stack(sv, axis=1)             # → [n, n_classes, n_features]
+            else:
+                sv = np.asarray(sv)
+                if sv.ndim == 3:
+                    sv = np.transpose(sv, (0, 2, 1))  # → [n, n_classes, n_features]
+                elif sv.ndim == 2:
+                    sv = sv[:, np.newaxis, :]          # binary/regresi → 1 class axis
             ev = explainer.expected_value
             if not hasattr(ev, "__len__"):
                 ev = [ev]
