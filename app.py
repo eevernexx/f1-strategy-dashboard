@@ -300,8 +300,5 @@ elif page == "Driver Comparison":
     driver_comparison.render()
 
 elif page == "Race Predictor":
-    st.title("Race Predictor")
-    st.info(
-        "Coming soon — race outcome classification (podium/top-10/DNF) "
-        "with SHAP explainability."
-    )
+    from pages import race_predictor
+    race_predictor.render()
