@@ -132,16 +132,19 @@ def get_laps(_session: fastf1.core.Session, session_id: str) -> pd.DataFrame:
         & laps["PitOutTime"].isna()
     ].copy()
 
-    # Remove statistical outliers per driver
-    def remove_outliers(group):
+    # Remove statistical outliers per driver. Pakai boolean mask per-group
+    # (bukan groupby.apply) supaya bebas dari DeprecationWarning pandas 2.2
+    # soal apply yang menyentuh grouping column.
+    keep_mask = pd.Series(True, index=valid.index)
+    for _driver, group in valid.groupby("Driver"):
         median = group["LapTimeSeconds"].median()
         std    = group["LapTimeSeconds"].std()
         if pd.isna(std):
             # Single-lap driver (qualifying) — std is NaN, keep as-is
-            return group
-        return group[group["LapTimeSeconds"] < median + 2 * std]
+            continue
+        keep_mask.loc[group.index] = group["LapTimeSeconds"] < median + 2 * std
 
-    valid = valid.groupby("Driver", group_keys=False).apply(remove_outliers)
+    valid = valid[keep_mask]
     return valid.reset_index(drop=True)
 
 

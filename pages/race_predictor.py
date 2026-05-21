@@ -103,7 +103,7 @@ def render():
     col_metrics, col_circuit = st.columns([3, 2])
     with col_metrics:
         m1, m2, m3 = st.columns(3)
-        m1.metric("Training Races", f"{model_bundle['n_train'] + model_bundle['n_test']} rows")
+        m1.metric("Training rows", f"{model_bundle['n_train'] + model_bundle['n_test']} driver-races")
         m2.metric("Accuracy", f"{model_bundle['accuracy']:.1%}")
         report_lines = model_bundle["report"].strip().split("\n")
         f1_line = [l for l in report_lines if "weighted avg" in l]
@@ -160,6 +160,13 @@ def render():
         st.info("Select a round and click **RUN PREDICTION** to see results.")
         return
 
+    st.caption(
+        "⚠️ Disclaimer: model dilatih pada seluruh round 2022-2024, termasuk "
+        "race yang sedang diprediksi (in-sample). Akurasi & probabilitas di sini "
+        "cenderung optimistis — bukan prediksi out-of-sample murni. Untuk evaluasi "
+        "realistis, perlu hold-out race yang tidak masuk training set."
+    )
+
     # ── Tabs ───────────────────────────────────────────────────────────
     tab_outcome, tab_win, tab_shap, tab_eval = st.tabs([
         "Outcome Probabilities",
@@ -197,7 +204,7 @@ def render():
             st.subheader("Global Feature Importance")
             st.caption(
                 f"Mean |SHAP| across {len(shap_driver_order)} drivers in "
-                f"{selected_circuit} {year} (Podium class)."
+                f"{selected_circuit} {year}, averaged over all 4 outcome classes."
             )
             fig_imp = build_shap_importance_bar(shap_vals, feat_names)
             if fig_imp:

@@ -434,6 +434,10 @@ def build_track_dominance_map(
         return None
 
     max_d = float(pos_dist.max())
+    if max_d <= 0:
+        # Degenerate position data (semua sample di koordinat sama) — tidak bisa
+        # bagi mini-sector tanpa division-by-zero di bawah.
+        return None
     boundaries = np.linspace(0, max_d, n_sectors + 1)
 
     # Winner per mini-sector

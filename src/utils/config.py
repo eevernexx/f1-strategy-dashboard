@@ -144,13 +144,17 @@ TEAM_COLORS = {
 }
 
 # Compound tyre colors (official Pirelli palette)
+# Catatan: FastF1 mengembalikan "INTERMEDIATE" (bukan "INTER") sebagai nilai
+# kolom Compound. Sediakan kedua key supaya lookup .get(compound.upper())
+# tidak jatuh ke fallback abu-abu untuk ban intermediate.
 COMPOUND_COLORS = {
-    "SOFT":    "#FF3333",
-    "MEDIUM":  "#FFD700",
-    "HARD":    "#FFFFFF",
-    "INTER":   "#39B54A",
-    "WET":     "#0067FF",
-    "UNKNOWN": "#888888",
+    "SOFT":         "#FF3333",
+    "MEDIUM":       "#FFD700",
+    "HARD":         "#FFFFFF",
+    "INTERMEDIATE": "#39B54A",
+    "INTER":        "#39B54A",
+    "WET":          "#0067FF",
+    "UNKNOWN":      "#888888",
 }
 
 SESSION_TYPES = ["R", "Q", "FP1", "FP2", "FP3", "SQ"]
