@@ -296,8 +296,8 @@ elif page == "Tyre Strategy":
     tyre_strategy.render()
 
 elif page == "Driver Comparison":
-    st.title("Driver Comparison")
-    st.info("Coming soon — head-to-head season stats with circuit/season filter.")
+    from pages import driver_comparison
+    driver_comparison.render()
 
 elif page == "Race Predictor":
     st.title("Race Predictor")
