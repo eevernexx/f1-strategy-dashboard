@@ -39,35 +39,17 @@ CLASS_COLORS = {
 }
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner="Training race prediction model …")
 def _get_trained_model(years_key: str):
     """Train once, cache until app restart. years_key = '2022-2023-2024'."""
     years = [int(y) for y in years_key.split("-")]
 
-    progress_bar = st.progress(0)
-    status_box = st.status("Building training dataset...", expanded=True)
-
-    def _progress(current, total, label):
-        frac = current / max(total, 1)
-        progress_bar.progress(frac)
-        status_box.update(label=f"Loading {label} ({current}/{total})")
-
-    X, y, fcols = build_training_dataset(years, F1_ROUNDS, progress_cb=_progress)
+    X, y, fcols = build_training_dataset(years, F1_ROUNDS)
 
     if X is None or y is None or len(X) == 0:
-        progress_bar.empty()
-        status_box.update(label="Failed to build dataset", state="error")
         return None
 
-    status_box.update(label="Training XGBoost classifier...")
     bundle = train_race_model(X, y, fcols)
-
-    progress_bar.empty()
-    if bundle is None:
-        status_box.update(label="Training failed", state="error")
-        return None
-
-    status_box.update(label=f"Model ready — accuracy {bundle['accuracy']:.1%}", state="complete")
     return bundle
 
 
