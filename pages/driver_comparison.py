@@ -862,11 +862,17 @@ def _render_mode_b():
 
     col1, col2 = st.columns([1, 3])
     with col1:
+        # Key HARUS unik dari Mode A — st.tabs me-render semua tab di run yang
+        # sama, jadi tidak boleh dua widget pakai key="selected_year".
+        # Inisialisasi index dari shared selected_year supaya tahun sinkron
+        # dengan tab/page lain saat pertama dibuka.
+        _year_opts = sorted(SUPPORTED_YEARS, reverse=True)
+        _cur_year = st.session_state.get("selected_year", _year_opts[0])
         selected_year = st.selectbox(
             "Season",
-            options=sorted(SUPPORTED_YEARS, reverse=True),
-            index=0,
-            key="selected_year",  # shared dengan tab lain & page lain
+            options=_year_opts,
+            index=_year_opts.index(_cur_year) if _cur_year in _year_opts else 0,
+            key="dc_b_year",
         )
     with col2:
         st.caption(
