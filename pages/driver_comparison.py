@@ -3,17 +3,20 @@ Driver Comparison Page
 ======================
 Head-to-head 2 driver dengan 3 mode filter.
 
-Mode A — Single Race H2H (implemented):
-- Pilih Year + GP + Driver 1 + Driver 2
-- Banner 2 driver cards (team color)
-- Quali H2H: Q1/Q2/Q3 + grid + gap
-- Race H2H: finish, points, fastest lap, status (DNF?)
-- Lap-by-lap cumulative time delta chart
-- Pace distribution box plot
-- Tyre strategy comparison (mini stint bars)
-- Radar chart: pace, consistency, fastest lap, top speed, sector wins
+Mode A — Single Race H2H (FastF1 session):
+- Year + GP + Driver 1 + Driver 2
+- Banner cards, Quali H2H (Q1/Q2/Q3 + gap), Race H2H (finish/points/FL/status)
+- Lap-by-lap cumulative time delta, pace distribution box, stint compare
+- Radar: pace, consistency, fastest lap, top speed, sector wins
 
-Mode B (Season H2H) & Mode C (Circuit history) — coming soon (placeholder).
+Mode B — Season H2H (Ergast):
+- Year + Driver 1 + Driver 2
+- Summary cards (points/wins/podiums/poles/FL/DNF), cumulative points chart,
+  win-loss tally, per-GP H2H table. Points = race + sprint.
+
+Mode C — Circuit history H2H (Ergast):
+- Circuit + Driver 1 + Driver 2, lintas musim 2022-2024
+- Per-year quali/race detail, career stats, finish-position-by-year chart
 """
 
 from __future__ import annotations
@@ -855,7 +858,7 @@ def _render_mode_a():
                 )
 
 
-# ── Mode B / C placeholders ──────────────────────────────────────────────────
+# ── Mode B: Season H2H renderer ──────────────────────────────────────────────
 
 def _render_mode_b():
     """Season head-to-head pakai Ergast API."""
