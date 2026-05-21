@@ -70,6 +70,17 @@ CIRCUIT_META = {
 
 TEAM_NAMES = sorted(TEAM_COLORS.keys())
 
+_TEAM_NORMALIZE = {
+    "AlphaTauri":           "RB",
+    "Scuderia AlphaTauri":  "RB",
+    "Alpha Tauri":          "RB",
+    "Alfa Romeo":           "Kick Sauber",
+    "Alfa Romeo Racing":    "Kick Sauber",
+    "Alpine F1 Team":       "Alpine",
+    "Aston Martin Aramco Mercedes":  "Aston Martin",
+    "Aston Martin Aramco Cognizant": "Aston Martin",
+}
+
 _FINISHED_RE = re.compile(r"^(Finished|\+\d+ Lap)")
 
 
@@ -147,7 +158,8 @@ def assemble_race_features(
             pos = np.nan
 
         status_raw = str(r.get("Status", ""))
-        team = str(r.get("TeamName", ""))
+        team_raw = str(r.get("TeamName", ""))
+        team = _TEAM_NORMALIZE.get(team_raw, team_raw)
         driver_code = str(r.get("Abbreviation", ""))
 
         outcome = _outcome_class(status_raw, pos)

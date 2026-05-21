@@ -47,8 +47,6 @@ def _get_trained_model(years_key: str):
     progress_bar = st.progress(0)
     status_box = st.status("Building training dataset...", expanded=True)
 
-    total_races = sum(len(F1_ROUNDS.get(y, {})) for y in years)
-
     def _progress(current, total, label):
         frac = current / max(total, 1)
         progress_bar.progress(frac)
@@ -89,9 +87,12 @@ def render():
             unsafe_allow_html=True,
         )
 
+        _year_opts = sorted(SUPPORTED_YEARS, reverse=True)
+        _cur_year = st.session_state.get("selected_year", _year_opts[0])
         year = st.selectbox(
-            "Year", SUPPORTED_YEARS, key="rp_year",
-            index=len(SUPPORTED_YEARS) - 1,
+            "Year", _year_opts,
+            index=_year_opts.index(_cur_year) if _cur_year in _year_opts else 0,
+            key="rp_year",
         )
         rounds = F1_ROUNDS.get(year, {})
         round_options = list(rounds.items())
