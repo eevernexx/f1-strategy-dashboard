@@ -22,7 +22,6 @@ import pandas as pd
 
 try:
     import xgboost as xgb
-    from sklearn.model_selection import train_test_split
     from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
     from sklearn.utils.class_weight import compute_sample_weight
     _ML_OK = True
@@ -81,7 +80,6 @@ CIRCUIT_META = {
     "Azerbaijan":      {"overtake_idx": 6, "track_type": 0},
     "Abu Dhabi":       {"overtake_idx": 5, "track_type": 1},
     "France":          {"overtake_idx": 5, "track_type": 1},
-    "Monza":           {"overtake_idx": 9, "track_type": 1},
 }
 
 TEAM_NAMES = sorted(TEAM_COLORS.keys())

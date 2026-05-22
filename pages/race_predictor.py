@@ -31,16 +31,11 @@ try:
         build_shap_waterfall,
         build_confusion_matrix_heatmap,
     )
+    _VIZ_OK = True
 except ImportError:
-    pass
+    _VIZ_OK = False
 
 CLASS_NAMES = ["DNF", "Podium", "Points", "Outside Points"]
-CLASS_COLORS = {
-    "DNF": "#888888",
-    "Podium": "#E8002D",
-    "Points": "#FF8000",
-    "Outside Points": "#444444",
-}
 
 
 @st.cache_resource(show_spinner=False)
@@ -72,6 +67,12 @@ def render():
         )
         return
 
+    if not _VIZ_OK:
+        st.error(
+            "Plotly not installed. Run: `pip install plotly`"
+        )
+        return
+
     # ── Sidebar controls ───────────────────────────────────────────────
     with st.sidebar:
         st.markdown(
@@ -88,6 +89,9 @@ def render():
         )
         rounds = F1_ROUNDS.get(year, {})
         round_options = list(rounds.items())
+        if not round_options:
+            st.warning("No rounds available for this year.")
+            return
         round_labels = [f"R{num} — {name}" for num, name in round_options]
         round_idx = st.selectbox(
             "Round", range(len(round_labels)),

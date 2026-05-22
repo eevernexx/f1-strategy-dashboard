@@ -30,10 +30,10 @@ LAYOUT_BASE = dict(
 )
 
 _CLS_COLORS = {
-    "DNF":     "#888888",
-    "Podium":  "#E8002D",
-    "Points":  "#FF8000",
-    "Outside": "#444444",
+    "DNF":            "#888888",
+    "Podium":         "#E8002D",
+    "Points":         "#FF8000",
+    "Outside Points": "#444444",
 }
 
 
@@ -50,7 +50,7 @@ def build_outcome_probability_bar(proba_df: pd.DataFrame) -> go.Figure | None:
         ("prob_dnf",     "DNF",     _CLS_COLORS["DNF"]),
         ("prob_podium",  "Podium",  _CLS_COLORS["Podium"]),
         ("prob_points",  "Points",  _CLS_COLORS["Points"]),
-        ("prob_outside", "Outside", _CLS_COLORS["Outside"]),
+        ("prob_outside", "Outside Points", _CLS_COLORS["Outside Points"]),
     ]:
         vals = (df[col] * 100).tolist()
         fig.add_trace(go.Bar(
