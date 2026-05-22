@@ -7,6 +7,8 @@ import numpy as np
 
 from src.utils.config import SUPPORTED_YEARS, F1_ROUNDS
 
+MODEL_PATH = "models/race_model.joblib"
+
 try:
     from src.ml.race_model import (
         _ML_OK,
@@ -16,6 +18,7 @@ try:
         predict_race_outcome,
         build_prediction_features,
         compute_race_shap,
+        load_model_bundle,
     )
 except ImportError:
     _ML_OK = False
@@ -40,18 +43,24 @@ CLASS_COLORS = {
 }
 
 
-@st.cache_resource(show_spinner="Training race prediction model …")
-def _get_trained_model(years_key: str):
-    """Train once, cache until app restart. years_key = '2022-2023-2024'."""
-    years = [int(y) for y in years_key.split("-")]
+@st.cache_resource(show_spinner=False)
+def _load_or_train_model(years_key: str):
+    """
+    Try to load a pre-trained bundle from MODEL_PATH first.
+    Falls back to training from FastF1 data if no file found.
+    years_key used only as cache key for the fallback path.
+    """
+    bundle = load_model_bundle(MODEL_PATH)
+    if bundle is not None:
+        return bundle, True  # (bundle, is_pretrained)
 
-    X, y, fcols = build_training_dataset(years, F1_ROUNDS)
-
-    if X is None or y is None or len(X) == 0:
-        return None
-
-    bundle = train_race_model(X, y, fcols)
-    return bundle
+    with st.spinner("Training race prediction model (first run — takes a few minutes) …"):
+        years = [int(y) for y in years_key.split("-")]
+        X, y, fcols = build_training_dataset(years, F1_ROUNDS)
+        if X is None or y is None or len(X) == 0:
+            return None, False
+        bundle = train_race_model(X, y, fcols)
+        return bundle, False
 
 
 def render():
@@ -89,13 +98,18 @@ def render():
 
         run = st.button("RUN PREDICTION", key="rp_run")
 
-    # ── Model training (cached) ────────────────────────────────────────
+    # ── Model loading / training (cached) ─────────────────────────────
     years_key = "-".join(str(y) for y in SUPPORTED_YEARS)
-    model_bundle = _get_trained_model(years_key)
-
-    if model_bundle is None:
-        st.warning("Could not train model. Check that FastF1 data is accessible.")
+    result = _load_or_train_model(years_key)
+    if result is None or result[0] is None:
+        st.warning("Could not load or train model. Check that FastF1 data is accessible.")
         return
+    model_bundle, is_pretrained = result
+
+    if is_pretrained:
+        st.success("Pre-trained model loaded from `models/race_model.joblib`.", icon="✅")
+    else:
+        st.info("Model trained on-the-fly from FastF1 data. Upload `models/race_model.joblib` from Colab for better results.", icon="ℹ️")
 
     # ── Info row ───────────────────────────────────────────────────────
     meta = CIRCUIT_META.get(selected_circuit, {"overtake_idx": 5, "track_type": 1})
