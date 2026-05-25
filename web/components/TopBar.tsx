@@ -50,7 +50,7 @@ export function TopBar({
         initial={{ opacity: 0, x: 12 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex items-center gap-2.5"
+        className="flex flex-wrap items-center justify-end gap-2.5"
       >
         {/* advanced visualization (Streamlit app) */}
         <a
@@ -58,7 +58,7 @@ export function TopBar({
           target="_blank"
           rel="noopener noreferrer"
           title="Open the advanced Streamlit dashboard"
-          className="flex items-center gap-2 rounded-pill border border-line bg-ov/[0.03] px-3 py-1.5 text-[13px] font-semibold text-ink-dim transition-colors hover:border-f1 hover:text-ink"
+          className="order-last flex w-full items-center justify-center gap-2 rounded-pill border border-line bg-ov/[0.03] px-3 py-1.5 text-[13px] font-semibold text-ink-dim transition-colors hover:border-f1 hover:text-ink sm:order-none sm:w-auto sm:justify-start"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
             <path d="M3 13.5 12 9l9 4.5M3 13.5 12 18l9-4.5M3 13.5V18l9 4.5 9-4.5v-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
