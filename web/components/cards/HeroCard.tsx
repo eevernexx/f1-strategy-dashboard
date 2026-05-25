@@ -17,7 +17,7 @@ export function HeroCard({ season }: { season: Season }) {
     .map((r) => r.circuit.split(" ")[0].slice(0, 3) || `R${r.round}`);
 
   return (
-    <Card showArrow span="lg:col-span-6" bodyClassName="flex flex-col">
+    <Card span="lg:col-span-5" bodyClassName="flex flex-col">
       <div className="mb-1 flex items-center gap-2 text-[13px] font-medium text-ink-dim">
         <span
           className="h-2.5 w-2.5 rounded-full"
@@ -35,12 +35,7 @@ export function HeroCard({ season }: { season: Season }) {
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="pill bg-f1-soft text-f1">
-          {leader.wins} wins
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M7 17 17 7M17 7H9M17 7v8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
+        <span className="pill bg-f1-soft text-f1">{leader.wins} wins</span>
         <span className="pill bg-white/[0.05] text-ink-dim">+{gap.toFixed(0)} pt lead</span>
         <span className="pill bg-white/[0.05] text-ink-dim">{winRate}% win rate</span>
       </div>

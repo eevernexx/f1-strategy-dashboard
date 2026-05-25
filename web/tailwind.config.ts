@@ -5,25 +5,28 @@ const config: Config = {
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
   ],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        // Finrise-style dark surfaces
-        base: "#0a0a0f",
-        surface: "#13131b",
-        "surface-2": "#191922",
-        card: "#15151e",
-        line: "rgba(255,255,255,0.07)",
-        // F1 red accent
+        // Theme-driven surfaces (see CSS vars in globals.css)
+        base: "var(--c-base)",
+        surface: "var(--c-surface)",
+        "surface-2": "var(--c-surface-2)",
+        card: "var(--c-card)",
+        line: "var(--c-line)",
+        // neutral overlay (white in dark, near-black in light) with alpha support
+        ov: "rgb(var(--c-ov) / <alpha-value>)",
+        // F1 red accent (constant across themes)
         f1: {
           DEFAULT: "#E8002D",
           hover: "#FF1744",
           soft: "rgba(232,0,45,0.14)",
         },
         ink: {
-          DEFAULT: "#f4f4f6",
-          dim: "#a0a0b0",
-          faint: "#6a6a78",
+          DEFAULT: "var(--c-ink)",
+          dim: "var(--c-ink-dim)",
+          faint: "var(--c-ink-faint)",
         },
         pos: "#22c55e",
         neg: "#ef4444",

@@ -1,16 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useTheme } from "@/lib/useTheme";
 
 export function TopBar({
   years,
   year,
   onYearChange,
+  viewLabel,
+  onMenu,
 }: {
   years: number[];
   year: number;
   onYearChange: (y: number) => void;
+  viewLabel: string;
+  onMenu: () => void;
 }) {
+  const { theme, toggle } = useTheme();
+
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
       <motion.div
@@ -19,12 +26,23 @@ export function TopBar({
         transition={{ duration: 0.5 }}
         className="flex items-center gap-3"
       >
-        <h1 className="text-xl font-extrabold tracking-tight text-ink md:text-[22px]">
-          F1 Intelligence
+        {/* mobile menu button */}
+        <button
+          onClick={onMenu}
+          aria-label="Open navigation"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-ov/[0.03] text-ink-dim transition-colors hover:text-ink md:hidden"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        <h1 className="text-lg font-extrabold tracking-tight text-ink md:text-[22px]">
+          F1 Dashboard Visualization
         </h1>
         <span className="hidden h-5 w-px bg-line sm:block" />
         <span className="hidden text-[15px] font-medium text-ink-dim sm:block">
-          Season Dashboard
+          {viewLabel}
         </span>
       </motion.div>
 
@@ -35,7 +53,7 @@ export function TopBar({
         className="flex items-center gap-2.5"
       >
         {/* season selector */}
-        <div className="flex items-center rounded-pill border border-line bg-white/[0.03] p-1">
+        <div className="flex items-center rounded-pill border border-line bg-ov/[0.03] p-1">
           {years.map((y) => (
             <button
               key={y}
@@ -56,24 +74,23 @@ export function TopBar({
           ))}
         </div>
 
+        {/* theme toggle */}
         <button
-          aria-label="Search"
-          className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white/[0.03] text-ink-dim transition-colors hover:text-ink"
+          onClick={toggle}
+          aria-label="Toggle theme"
+          title={theme === "dark" ? "Switch to light" : "Switch to dark"}
+          className="grid h-9 w-9 place-items-center rounded-full border border-line bg-ov/[0.03] text-ink-dim transition-colors hover:text-ink"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-            <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
-            <path d="m20 20-3.2-3.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        </button>
-        <button
-          aria-label="Notifications"
-          className="relative grid h-9 w-9 place-items-center rounded-full border border-line bg-white/[0.03] text-ink-dim transition-colors hover:text-ink"
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-            <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-f1 ring-2 ring-base" />
+          {theme === "dark" ? (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+              <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          )}
         </button>
       </motion.div>
     </header>

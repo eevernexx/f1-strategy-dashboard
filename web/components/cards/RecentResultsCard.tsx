@@ -20,20 +20,7 @@ export function RecentResultsCard({ season }: { season: Season }) {
   const rows = season.recent.filter((r) => match(r, filter)).slice(0, 8);
 
   return (
-    <Card
-      title="Recent results"
-      span="lg:col-span-6 lg:row-span-2"
-      action={
-        <button
-          aria-label="add"
-          className="grid h-7 w-7 place-items-center rounded-full bg-white/[0.06] text-ink-dim hover:text-ink"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      }
-    >
+    <Card title="Recent results" span="lg:col-span-4 lg:row-span-2">
       <div className="mb-3 flex items-center gap-1.5">
         {FILTERS.map((f) => (
           <button
@@ -46,18 +33,12 @@ export function RecentResultsCard({ season }: { season: Season }) {
             {filter === f && (
               <motion.span
                 layoutId="filter-pill"
-                className="absolute inset-0 rounded-pill bg-white/[0.08]"
+                className="absolute inset-0 rounded-pill bg-ov/[0.08]"
               />
             )}
             <span className="relative z-10">{f}</span>
           </button>
         ))}
-        <span className="ml-auto flex items-center gap-1 text-[12px] text-ink-faint">
-          Filter
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-            <path d="M3 5h18M6 12h12M10 19h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        </span>
       </div>
 
       <div className="flex flex-col">

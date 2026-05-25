@@ -13,7 +13,7 @@ export function TeamPointsCard({ season }: { season: Season }) {
   }));
 
   return (
-    <Card title="Constructor points" showArrow span="lg:col-span-3">
+    <Card title="Constructor points" span="lg:col-span-3">
       <div className="flex flex-col items-center">
         <RingChart segments={segments} />
         <div className="mt-3 grid w-full grid-cols-2 gap-x-3 gap-y-1.5">

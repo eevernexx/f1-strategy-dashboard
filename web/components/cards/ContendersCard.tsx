@@ -3,12 +3,19 @@
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import type { Season } from "@/lib/types";
+import type { ViewId } from "@/lib/nav";
 
-export function ContendersCard({ season }: { season: Season }) {
+export function ContendersCard({
+  season,
+  onNavigate,
+}: {
+  season: Season;
+  onNavigate?: (v: ViewId) => void;
+}) {
   const top = season.drivers.slice(0, 6);
 
   return (
-    <Card title="Title contenders" showArrow span="lg:col-span-6">
+    <Card title="Title contenders" span="lg:col-span-6">
       <div className="flex items-center gap-3">
         <div className="flex -space-x-3">
           {top.map((d, i) => (
@@ -28,8 +35,10 @@ export function ContendersCard({ season }: { season: Season }) {
         </div>
         <motion.button
           whileHover={{ scale: 1.08, rotate: 90 }}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-dashed border-white/20 text-ink-dim hover:text-ink"
-          aria-label="more"
+          onClick={() => onNavigate?.("standings")}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-dashed border-ov/20 text-ink-dim hover:text-ink"
+          aria-label="View full standings"
+          title="View full standings"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

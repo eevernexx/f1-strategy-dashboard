@@ -15,6 +15,8 @@ export const metadata: Metadata = {
     "Formula 1 season intelligence dashboard — standings, results and pace, in a modern card layout.",
 };
 
+const themeScript = `(function(){try{var t=localStorage.getItem('f1-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: {
@@ -22,6 +24,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={jakarta.variable}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="font-sans antialiased min-h-screen">{children}</body>
     </html>
   );
