@@ -52,6 +52,20 @@ export function TopBar({
         transition={{ duration: 0.5 }}
         className="flex items-center gap-2.5"
       >
+        {/* advanced visualization (Streamlit app) */}
+        <a
+          href="https://f1-strategy-dashboard-pnq5i4cjdnqx4cqv7f53dv.streamlit.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open the advanced Streamlit dashboard"
+          className="hidden items-center gap-2 rounded-pill border border-line bg-ov/[0.03] px-3.5 py-1.5 text-[13px] font-semibold text-ink-dim transition-colors hover:border-f1 hover:text-ink sm:flex"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+            <path d="M3 13.5 12 9l9 4.5M3 13.5 12 18l9-4.5M3 13.5V18l9 4.5 9-4.5v-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+          </svg>
+          Advanced Visualization
+        </a>
+
         {/* season selector */}
         <div className="flex items-center rounded-pill border border-line bg-ov/[0.03] p-1">
           {years.map((y) => (

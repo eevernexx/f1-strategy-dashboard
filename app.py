@@ -239,7 +239,7 @@ with st.sidebar:
     st.markdown(f"""
     <div style="padding: 20px 16px 16px; border-bottom: 1px solid #1A1A1A; margin-bottom: 16px;">
         {logo_img}
-        <div style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; color: #FFFFFF; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15;">Data Visualisation<br>Intelligence</div>
+        <div style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; color: #FFFFFF; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15;">Advanced Data<br>Visualization</div>
         <div style="font-family: 'Barlow', sans-serif; font-size: 11px; color: #444; margin-top: 6px;">{sidebar_year} FIA Formula One World Championship</div>
     </div>
     """, unsafe_allow_html=True)
