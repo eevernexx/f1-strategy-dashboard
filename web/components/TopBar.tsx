@@ -58,7 +58,7 @@ export function TopBar({
           target="_blank"
           rel="noopener noreferrer"
           title="Open the advanced Streamlit dashboard"
-          className="hidden items-center gap-2 rounded-pill border border-line bg-ov/[0.03] px-3.5 py-1.5 text-[13px] font-semibold text-ink-dim transition-colors hover:border-f1 hover:text-ink sm:flex"
+          className="flex items-center gap-2 rounded-pill border border-line bg-ov/[0.03] px-3 py-1.5 text-[13px] font-semibold text-ink-dim transition-colors hover:border-f1 hover:text-ink"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
             <path d="M3 13.5 12 9l9 4.5M3 13.5 12 18l9-4.5M3 13.5V18l9 4.5 9-4.5v-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
