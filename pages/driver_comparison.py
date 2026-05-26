@@ -1431,6 +1431,20 @@ def _render_mode_c():
     display_cols = [c for c in display_cols if c in circuit_df.columns]
     display_df = circuit_df[display_cols].copy()
 
+    # Year sebagai string supaya tidak dirender sebagai angka ber-pemisah ribuan
+    # (mis. "2,022"). Tahun = label, bukan nilai numerik.
+    if "Year" in display_df.columns:
+        display_df["Year"] = display_df["Year"].apply(
+            lambda v: f"{int(v)}" if pd.notna(v) else "—"
+        )
+
+    # Sprint sebagai penanda teks (✓ / —), bukan boolean — boolean dirender
+    # Streamlit sebagai checkbox read-only yang terlihat bisa diklik (membingungkan).
+    if "Sprint" in display_df.columns:
+        display_df["Sprint"] = display_df["Sprint"].apply(
+            lambda v: "✓" if bool(v) else "—"
+        )
+
     # Format points
     for pts_col in [f"Pts {driver_a}", f"Pts {driver_b}"]:
         if pts_col in display_df.columns:
