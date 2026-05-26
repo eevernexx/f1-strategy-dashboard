@@ -642,6 +642,7 @@ def build_circuit_h2h(
 
         rows.append({
             "Year":               year,
+            "Sprint":             rnd in sprints,
             f"Quali {driver_a}":  _posfmt(qa),
             f"Quali {driver_b}":  _posfmt(qb),
             f"Race {driver_a}":   _posfmt(ra),

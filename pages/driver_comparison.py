@@ -1414,11 +1414,15 @@ def _render_mode_c():
         "Year-by-year detail",
         help=(
             "Quali & race position + total points (race + sprint) per tahun. "
+            "Kolom 'Sprint' = centang kalau weekend itu punya Sprint race, "
+            "jadi poin-nya sudah termasuk poin sprint (mis. Belgia 2023: "
+            "25 race + 8 sprint = 33). "
             "'DNC' = did not compete (driver belum/tidak balapan tahun itu)."
         ),
     )
     display_cols = [
         "Year",
+        "Sprint",
         f"Quali {driver_a}", f"Quali {driver_b}",
         f"Race {driver_a}",  f"Race {driver_b}",
         f"Pts {driver_a}",   f"Pts {driver_b}",
